@@ -1,0 +1,769 @@
+<!doctype html>
+<html>
+  <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.2.8/d3.min.js" type="text/JavaScript"></script>
+    <script src="https://d3js.org/d3-geo-projection.v1.min.js"></script>
+    <script src="../js/colorbrewer.js"></script>
+    <style>
+      path.countries {
+        stroke-width: 1;
+        stroke: #75739F;
+        fill:#FFDAB9;
+      }
+
+      rect.bbox {
+        fill: none;
+        stroke-dasharray: 5 5;
+        stroke: #75739F;
+        stroke-width: 2;
+        pointer-events: none;
+      }
+      path.graticule {
+        fill: none;
+        stroke-width: 1;
+        stroke: #9A8B7A;
+      }
+      path.graticule.outline {
+        stroke: #9A8B7A;
+      }
+
+      path.merged {
+        fill: #9A8B7A;
+        stroke: #4F442B;
+        stroke-width: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+     <button onclick=" south();">South America</button> 
+     <button onclick=" north();">North America</button> 
+     <button onclick=" both();">Both</button> 
+    </div>
+    <div id="viz">
+      <svg style="width:1400px;height:700px;border;" ></svg>
+    </div>
+    <script>
+     
+
+var PromiseWrapper = (xhr, d) => new Promise(resolve => xhr(d, (p) => resolve(p)));
+
+      Promise
+        .all([
+          PromiseWrapper(d3.json, "../data/NA_SA.geojson"),
+          PromiseWrapper(d3.csv,"../data/covid_weekly_NA_SA.csv"),
+        // 
+        ])
+        .then(resolve => {
+          createMap(resolve[0], resolve[1],"both");
+        });
+
+//put data from CSV into array
+
+      function datacall(countries){
+                var cases_diff_array = [];
+
+        for(i = 0; i < countries.length; i++){
+          var countryName = "";
+          var case_change = 0;
+          var curr_week = 0;
+          var last_week = 0;
+          var curr_week_1M = 0;
+          var deaths_curr = 0;
+          var deaths_last = 0;
+          var death_change = 0;
+          var deaths_curr_1M = 0;
+          var population = 0;
+          for(attr in countries[i]){
+            if(attr == "Country/Other"){
+
+              if(countries[i][attr] == "USA"){
+                countryName = "United States of America";
+              } else{
+              countryName = countries[i][attr];
+            }
+
+            } else if(attr == "Cases in the last 7 days"){
+              curr_week = parseInt(countries[i][attr]);
+            } else if(attr == "Cases in the preceding 7 days"){
+              last_week = parseInt(countries[i][attr]);
+            } else if(attr == "Weekly Case % Change"){
+              case_change = parseInt(countries[i][attr]);
+            } else if(attr == "Cases in the last 7 days/1M pop"){
+              curr_week_1M = parseInt(countries[i][attr]);
+            } else if(attr == "Deaths in the last 7 days"){
+              deaths_curr = parseInt(countries[i][attr]);
+            } else if(attr == "Deaths in the preceding 7 days"){
+              deaths_last = parseInt(countries[i][attr]);
+            } else if(attr == "Weekly Death % Change"){
+              death_change = parseInt(countries[i][attr]);
+            } else if(attr == "Deaths in the last 7 days/1M pop"){
+              deaths_curr_1M = parseFloat(countries[i][attr]);
+            } else if(attr == "Population"){
+              population = parseInt(countries[i][attr]);
+            }
+          }
+          cases_diff_array.push({country: countryName, curr_week_cases: curr_week, last_week_cases: last_week, case_change: case_change, curr_week_cases_1M: curr_week_1M, deaths_curr_week: deaths_curr, deaths_last_week: deaths_last, death_change: death_change, deaths_curr_week_1M: deaths_curr_1M, population: population});
+        }
+        return cases_diff_array
+
+      }
+
+      
+
+//produce map
+
+      function createMap(countries, data, type) {
+
+        
+        if(type == "south"){
+          d3.select("svg").selectAll("*").remove();
+          var aProjection = d3.geoMercator() 
+          .scale(260)
+          .translate([460, 120]);
+
+          cases_data = datacall(data);
+
+        }
+
+        if(type == "both"){
+          d3.select("svg").selectAll("*").remove();
+            var aProjection = d3.geoMercator() 
+          .scale(150)
+          .translate([470, 450]);
+
+          cases_data = datacall(data);
+        }
+
+        if(type == "north"){
+          d3.select("svg").selectAll("*").remove();
+            var aProjection = d3.geoMercator() 
+          .scale(150)
+          .translate([470, 450]);
+
+          cases_data = datacall(data);
+        }
+
+
+        case_count(type);
+
+        var geoPath = d3.geoPath().projection(aProjection); 
+        var featureSize = d3.extent(countries.features, d => geoPath.area(d));
+        
+        // var countryColor = d3.scaleQuantize()
+        //   .domain(featureSize).range(colorbrewer.Blues[2]);
+      
+        var countryColor = d3.scaleQuantize()
+          .domain(featureSize).range("#6A5ACD","#4B0082");
+
+     var colour = d3.scaleLinear().domain([-800000,0,8000]).range(["#6A5ACD","#E6E6FA","#4B0082"]);
+
+        var curr = 0;
+        var prev = 0;
+        var diff = 0;
+
+
+        d3.select("svg").selectAll("path").data(countries.features)
+          .enter() //all countries drawn
+          .append("path")
+            .attr("d", geoPath)
+            .attr("class", "countries")
+           .style("fill", d => countryColor(geoPath.area(d)))
+            .style("stroke", d => d3.rgb(countryColor(geoPath.area(d))).darker());
+
+//Change map colour???
+//tried to change based on if the percent change was positive or negative
+
+  // var colour = d3.scaleQuantize().domain([-60000,0,1000000]).range("blue","red","orange");
+
+  //       d3.select("svg").selectAll("path").data(countries.features)
+  //         .enter() //all countries drawn
+  //         .append("path")
+  //           .attr("d", geoPath)
+  //           .attr("class", "countries")
+  //          .style("fill",function(d){
+  //           for(i = 0; i < cases_data.length; i++){
+  //             if(cases_data[i].country == d.properties.name){
+  //               console.log(cases_data[i].country);
+  //                 console.log(cases_data[i].case_change);
+  //              return countryColor(cases_data[i].case_change);
+  //             };
+  //           };
+  //          })
+  //           .style("stroke", d => d3.rgb(countryColor(geoPath.area(d))).darker());
+
+
+
+      var clicked_country = '';
+
+      d3.selectAll("path.countries")
+        .data(countries.features)
+            .on("click", function(d){
+              removeattributes(d.properties.name);
+              clicked_country = attributes(d.properties.name);
+            });
+      
+
+//showing info for each country
+      function attributes(name){
+
+          d3.select("svg")
+          .append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "middle")
+          .style("font-size", "30px")
+          .style("font-weight", "bold")
+          .attr("y", 12)
+          .attr("transform", "translate(900, 40)")
+          .text(name);
+
+
+          var found_country;
+
+          for(i = 0; i < cases_data.length; i++){
+            if(cases_data[i].country == name){
+              found_country = cases_data[i];
+            }
+          }
+
+        var comma = d3.format(",.0f");
+
+          d3.select("svg")
+          .append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "left")
+          .style("font-size", "15px")
+          .attr("y", 12)
+          .attr("transform", "translate(520, 60)")
+          .style("text-decoration", "underline")
+          .text("Population: "+comma(found_country.population));
+
+          var maxCurrCases = d3.max(cases_data, d => (d.curr_week_cases));
+          var maxLastCases = d3.max(cases_data, d => (d.last_week_cases));
+
+          //var maxCaseArray = [maxCurrCases, maxLastCases];
+         var maxCaseArray = [found_country.curr_week_cases, found_country.last_week_cases];
+
+          var maxCases = d3.max(maxCaseArray)
+
+           xScale1 = d3.scaleLinear()
+            .domain([0, maxCases+500])
+            .range([0,550]);
+
+          yScale1 = d3.scaleLinear()
+          .domain([1,2])
+          .range([448,0]);
+
+          colour = d3.scaleOrdinal(["#808080", "#D3D3D3"]);
+
+          var plot_cases = [found_country.curr_week_cases, found_country.last_week_cases]
+
+          d3.select("svg")
+            .append("g")
+           .attr("transform", "translate(515,180)")
+            .selectAll("rect")
+            .data(plot_cases)
+            .enter()
+            .append("rect")
+            .attr("height", 15)
+            .attr("width", d=> xScale1(d))
+            .attr("x", 5)
+            .attr("y", (d,i) => i*20)
+            .attr("fill", function(d,i) {
+              return colour(i);
+     
+          })
+
+          var xAxis1 = d3.axisBottom().scale(xScale1)
+
+          d3.select("svg")
+            .append("g")
+            .attr("transform", "translate(520,220)")
+            .call(xAxis1);
+
+          var maxCurrDeathCases = d3.max(cases_data, d=> (d.deaths_curr_week));
+          var maxLastDeathCases = d3.max(cases_data, d=> (d.deaths_last_week));
+
+          //var maxDeathsArray = [maxCurrDeathCases, maxLastDeathCases];
+          var maxDeathsArray = [found_country.deaths_curr_week, found_country.deaths_last_week]
+
+          var maxDeaths = d3.max(maxDeathsArray);
+
+          xScale2 = d3.scaleLinear()
+            .domain([0, maxDeaths+500])
+            .range([0,550]);
+
+          yScale2 = d3.scaleLinear()
+          .domain([1,2])
+          .range([448,0]);
+
+        colour = d3.scaleOrdinal(["#808080", "#D3D3D3"]);
+
+        var plot_deaths = [found_country.deaths_curr_week, found_country.deaths_last_week]
+
+        d3.select("svg")
+            .append("g")
+           .attr("transform", "translate(515,390)")
+            .selectAll("rect")
+            .data(plot_deaths)
+            .enter()
+            .append("rect")
+            .attr("height", 15)
+            .attr("width", d=> xScale2(d))
+            .attr("x", 5)
+            .attr("y", (d,i) => i*20)
+            .attr("fill", function(d,i) {
+              return colour(i);
+     
+          })
+
+          var xAxis2 = d3.axisBottom().scale(xScale2)
+
+          d3.select("svg")
+            .append("g")
+            .attr("transform", "translate(520,430)")
+            .call(xAxis2);
+
+
+//last_week / curr_week legend + axis labels + bar graph titles
+
+
+          var label_last_week = ["Previous Week"]
+          var label_curr_week = ["Current Week"]
+          
+
+          d3.select("svg")
+              .append("g")
+              .attr("transform", "translate(740,120)")
+              .selectAll("circle")
+              .data(label_curr_week)
+              .enter()
+              .append("circle")
+              .attr("cx",100)
+              .attr("cy",(d,i)=>i*25)
+              .attr("r",7)
+              .style("fill","#808080");
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "right")
+            .attr("y", 12)
+            .style("font-size", "15px")
+            .attr("transform", "translate(850, 113)")
+            .text(label_curr_week+" ("+found_country.curr_week_cases_1M+" Cases per 1M)");
+
+          d3.select("svg")
+              .append("g")
+              .attr("transform", "translate(740,140)")
+              .selectAll("circle")
+              .data(label_last_week)
+              .enter()
+              .append("circle")
+              .attr("cx",100)
+              .attr("cy",(d,i)=>i*25)
+              .attr("r",7)
+              .style("fill","#D3D3D3");
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "end")
+            .attr("y", 12)
+            .style("font-size", "15px")
+            .attr("transform", "translate(940, 133)")
+            .text(label_last_week);
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "end")
+            .attr("y", 12)
+            .style("font-size", "17px")
+            .style("text-decoration", "underline")
+            .attr("transform", "translate(640, 100)")
+            .text("COVID-19 Cases");
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "end")
+            .attr("y", 12)
+           .style("font-size", "15px")
+            .attr("transform", "translate(850, 250)")
+            .text("Number of Cases");
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "end")
+            .attr("y", 12)
+            .style("font-size", "17px")
+            .style("text-decoration", "underline")
+            .attr("transform", "translate(650, 310)")
+            .text("COVID-19 Deaths");
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "end")
+            .attr("y", 12)
+           .style("font-size", "15px")
+            .attr("transform", "translate(850, 460)")
+            .text("Number of Deaths");
+
+          d3.select("svg")
+              .append("g")
+              .attr("transform", "translate(740,335)")
+              .selectAll("circle")
+              .data(label_curr_week)
+              .enter()
+              .append("circle")
+              .attr("cx",100)
+              .attr("cy",(d,i)=>i*25)
+              .attr("r",7)
+              .style("fill","#808080");
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "right")
+            .attr("y", 12)
+            .style("font-size", "15px")
+            .attr("transform", "translate(850, 327)")
+            .text(label_curr_week+" ("+found_country.deaths_curr_week_1M+" Deaths per 1M)");
+
+          d3.select("svg")
+              .append("g")
+              .attr("transform", "translate(740,355)")
+              .selectAll("circle")
+              .data(label_last_week)
+              .enter()
+              .append("circle")
+              .attr("cx",100)
+              .attr("cy",(d,i)=>i*25)
+              .attr("r",7)
+              .style("fill","#D3D3D3");
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "end")
+            .attr("y", 12)
+            .style("font-size", "15px")
+            .attr("transform", "translate(940, 347)")
+            .text(label_last_week);
+
+
+//percent changes
+
+
+      var pieValue = Math.abs(found_country.case_change/100);
+      var pieChart = d3.pie();
+      var case_changePie = pieChart([pieValue,1-pieValue]); 
+
+      var arc = d3.arc();
+      arc.innerRadius(0).outerRadius(50);
+      
+      var fillScale = d3.scaleOrdinal()
+        .range(["#FF7F50", "white"]);
+
+      var negative_fillScale = d3.scaleOrdinal()
+      .range(["#CD5C5C", "white"]);
+      
+      d3.select("svg")
+        .append("g") 
+          .attr("transform","translate(1260,180)")
+        .selectAll("path")
+        .data(case_changePie)
+        .enter() 
+        .append("path")
+         .attr("d", arc)
+          .style("fill", (d,i) => fillScale(i))
+          .style("stroke", "black") 
+          .style("stroke-width", "2px");
+
+      var pieDeathValue = Math.abs(found_country.death_change/100);
+      var truedeath_value = found_country.death_change/100
+      var death_changePie = pieChart([pieDeathValue,1-pieDeathValue]); 
+
+      var arc2 = d3.arc();
+      arc2.innerRadius(0).outerRadius(50);
+      
+      d3.select("svg")
+        .append("g") 
+          .attr("transform","translate(1260,380)")
+        .selectAll("path")
+        .data(death_changePie)
+        .enter() 
+        .append("path")
+         .attr("d", arc2)
+         .style("fill", (d,i) => fillScale(i))
+        // .style("fill", function(d){
+        //   if(truedeath_value < 0){
+        //     negative_fillScale(i);
+        //   } else{
+        //     fillScale(i)
+        //   }
+        // })
+          .style("stroke", "black") 
+          .style("stroke-width", "2px");
+
+//labels for percent change for death and cases + titles for pie charts
+
+      d3.select("svg")
+        .append("text")
+        .attr("class", "y label")
+        .attr("text-anchor", "middle")
+        .attr("y", 12)
+        .style("font-size", "17px")
+        .style("text-decoration", "underline")
+        .attr("transform", "translate(1260, 300)")
+        .text("Weekly Death % Change");
+
+      d3.select("svg")
+        .append("text")
+        .attr("class", "y label")
+        .attr("text-anchor", "middle")
+        .attr("y", 12)
+        .style("font-size", "17px")
+        .style("text-decoration", "underline")
+        .attr("transform", "translate(1260, 100)")
+        .text("Weekly Case % Change");
+
+      d3.select("svg")
+        .append("text")
+        .attr("class", "y label")
+        .attr("text-anchor", "end")
+        .attr("y", 12)
+        .attr("transform", "translate(1360, 170)")
+        .text(found_country.case_change+"%");
+
+      d3.select("svg")
+        .append("text")
+        .attr("class", "y label")
+        .attr("text-anchor", "end")
+        .attr("y", 12)
+        .attr("transform", "translate(1360, 370)")
+        .text(found_country.death_change+"%");
+
+      var pieLabel = ["Case/Death Percent Change (%)"];
+
+      d3.select("svg")
+          .append("g")
+          .attr("transform", "translate(1070,480)")
+          .selectAll("circle")
+          .data(pieLabel)
+          .enter()
+          .append("circle")
+          .attr("cx",100)
+          .attr("cy",(d,i)=>i*25)
+          .attr("r",7)
+          .style("fill","#FF7F50");
+
+          d3.select("svg")
+            .append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "end")
+            .attr("y", 12)
+            .style("font-size", "15px")
+            .attr("transform", "translate(1375, 473)")
+            .text(pieLabel);
+        
+}
+
+//Remove info on country after clicking a different one
+
+      function removeattributes(name){
+        d3.select("svg").selectAll("*").remove();
+        createMap(countries, data, type);
+
+      }
+
+      }
+
+//show south america
+    function south(){
+      var PromiseWrapper = (xhr, d) => new Promise(resolve => xhr(d, (p) => resolve(p)));
+        Promise
+          .all([
+            PromiseWrapper(d3.json, "../data/south_america.geojson"),
+            PromiseWrapper(d3.csv,"../data/covid_south_america_weekly_trend.csv"),
+           
+
+          ])
+          .then(resolve => {
+            createMap(resolve[0], resolve[1], "south");
+          }); 
+      }
+
+//show north america
+    function north(){
+      var PromiseWrapper = (xhr, d) => new Promise(resolve => xhr(d, (p) => resolve(p)));
+        Promise
+          .all([
+            PromiseWrapper(d3.json, "../data/north_america.geojson"),
+            PromiseWrapper(d3.csv,"../data/north_america_covid_weekly_trend.csv"),
+          // 
+          ])
+          .then(resolve => {
+            createMap(resolve[0], resolve[1],"north");
+          });
+
+      }
+
+//show both north and south america
+    function both(){
+      var PromiseWrapper = (xhr, d) => new Promise(resolve => xhr(d, (p) => resolve(p)));
+        Promise
+          .all([
+            PromiseWrapper(d3.json, "../data/NA_SA.geojson"),
+            PromiseWrapper(d3.csv,"../data/covid_weekly_NA_SA.csv"),
+          ])
+          .then(resolve => {
+            createMap(resolve[0], resolve[1], "both");
+          });       
+      }
+
+
+//counting cases
+
+    function case_count(type){
+
+      if(type == "north"){
+        d3.csv("../data/north_america_covid_weekly_trend.csv", case_calc);
+      }
+
+      if(type == "south"){
+        d3.csv("../data/covid_south_america_weekly_trend.csv", case_calc);
+      }
+
+      if(type == "both"){
+        d3.csv("../data/covid_weekly_NA_SA.csv", case_calc);
+      }
+
+      }
+
+        function case_calc(countries){
+
+          var abs_current_week = 0;
+          var abs_prev_week = 0;
+
+          for(i = 0; i < countries.length;i++){
+            
+              for(attr in countries[i]){
+                  if(attr == "Cases in the last 7 days"){
+                   abs_current_week += parseInt(countries[i][attr]);
+
+                }
+
+                if(attr == "Cases in the preceding 7 days"){
+                  abs_prev_week += parseInt(countries[i][attr]);
+                }
+              }
+        };
+
+        var cases_array = [];
+
+        for(i = 0; i < countries.length; i++){
+          var countryName = "";
+          var num_cases = 0;
+          for(attr in countries[i]){
+            if(attr == "Country/Other"){
+              countryName = countries[i][attr];
+            } if(attr == "Cases in the last 7 days/1M pop"){
+              num_cases = parseInt(countries[i][attr]);
+            }
+          }
+          cases_array.push({country: countryName, cases: num_cases});
+        }
+
+        cases_array.sort((a,b) => d3.ascending(parseInt(a.cases), parseInt(b.cases)));
+
+        var comma = d3.format(",.0f");
+
+//Display Top 5, Bottom 5, Cases
+
+        d3.select("svg")
+          .append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "left")
+          .attr("font-size","17px")
+          .attr("y", 12)
+          .style("text-decoration", "underline")
+          .attr("transform", "translate(30, 520)")
+          .text("Cases in current week: "+comma(abs_current_week));
+
+        d3.select("svg")
+          .append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "left")
+          .attr("y", 12)
+          .attr("font-size","17px")
+          .style("text-decoration", "underline")
+          .attr("transform", "translate(30, 500)")
+          .text("Cases in previous week: "+comma(abs_prev_week));
+
+        d3.select("svg")
+          .append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "left")
+          .attr("y", 12)
+          .attr("font-size","14px")
+          .attr("font-weight","bold")
+          .attr("transform", "translate(830, 535)")
+          .text("Top 5 Countries With Lowest Cases/1M Pop.: ");
+
+          var x = 510;
+          var y = 540;
+
+          for(i = 0; i < 5; i++){
+          // x -= 20;
+            y += 20;
+          d3.select("svg")
+          .append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "left")
+          .attr("y", 12)
+          .attr("font-size","14px")
+          .attr("transform", "translate("+x+","+y+")")
+          .text(i+1 +". " + cases_array[i].country +" ("+ comma(cases_array[i].cases) + ")");
+          }
+
+        d3.select("svg")
+          .append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "left")
+          .attr("y", 12)
+          .attr("font-size","14px")
+          .attr("font-weight","bold")
+          .attr("transform", "translate(510, 535)")
+          .text("Bottom 5 Countries With Lowest Cases/1M Pop.: ");
+
+          var x = 830;
+          var y = 540;
+
+          var index = cases_array.length-1;
+
+          for(i = 0; i < 5; i++){
+          // x -= 20;
+            y += 20;
+          d3.select("svg")
+          .append("text")
+          .attr("class", "y label")
+          .attr("text-anchor", "left")
+          .attr("y", 12)
+          .attr("font-size","14px")
+          .attr("transform", "translate("+x+","+y+")")
+          .text(i+1 +". " + cases_array[index].country +" ("+ comma(cases_array[index].cases) + ")");
+          index --;
+
+          }
+
+        return abs_current_week;
+        }
+
+
+    </script>
+  </body>
+</html>
