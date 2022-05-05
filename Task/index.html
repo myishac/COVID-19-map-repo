@@ -149,9 +149,6 @@ var PromiseWrapper = (xhr, d) => new Promise(resolve => xhr(d, (p) => resolve(p)
 
         var geoPath = d3.geoPath().projection(aProjection); 
         var featureSize = d3.extent(countries.features, d => geoPath.area(d));
-        
-        // var countryColor = d3.scaleQuantize()
-        //   .domain(featureSize).range(colorbrewer.Blues[2]);
       
         var countryColor = d3.scaleQuantize()
           .domain(featureSize).range("#6A5ACD","#4B0082");
@@ -170,28 +167,6 @@ var PromiseWrapper = (xhr, d) => new Promise(resolve => xhr(d, (p) => resolve(p)
             .attr("class", "countries")
            .style("fill", d => countryColor(geoPath.area(d)))
             .style("stroke", d => d3.rgb(countryColor(geoPath.area(d))).darker());
-
-//Change map colour???
-//tried to change based on if the percent change was positive or negative
-
-  // var colour = d3.scaleQuantize().domain([-60000,0,1000000]).range("blue","red","orange");
-
-  //       d3.select("svg").selectAll("path").data(countries.features)
-  //         .enter() //all countries drawn
-  //         .append("path")
-  //           .attr("d", geoPath)
-  //           .attr("class", "countries")
-  //          .style("fill",function(d){
-  //           for(i = 0; i < cases_data.length; i++){
-  //             if(cases_data[i].country == d.properties.name){
-  //               console.log(cases_data[i].country);
-  //                 console.log(cases_data[i].case_change);
-  //              return countryColor(cases_data[i].case_change);
-  //             };
-  //           };
-  //          })
-  //           .style("stroke", d => d3.rgb(countryColor(geoPath.area(d))).darker());
-
 
 
       var clicked_country = '';
@@ -499,13 +474,6 @@ var PromiseWrapper = (xhr, d) => new Promise(resolve => xhr(d, (p) => resolve(p)
         .append("path")
          .attr("d", arc2)
          .style("fill", (d,i) => fillScale(i))
-        // .style("fill", function(d){
-        //   if(truedeath_value < 0){
-        //     negative_fillScale(i);
-        //   } else{
-        //     fillScale(i)
-        //   }
-        // })
           .style("stroke", "black") 
           .style("stroke-width", "2px");
 
